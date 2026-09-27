@@ -25,8 +25,10 @@ Last updated: 2026-09-27 (morning). Read this first in a new Claude Code session
   Then compare the printed "stage-2 on val" macro F_0.5 with v5's 0.9746, record it in
   `RESULTS.md`, copy `output/` to `output_v6/`, commit + tag `v6`, and attach the zipped
   `matching_results.tsv` and models to a GitHub release.
-  Also check the blocking recall line printed by `merge-emb --split train` in `work/morning.log`
-  (v5: 96.3%) to see how much the embedding channel added.
+  The merged blocking recall was NOT measured (the recall loop after the train merge was too slow
+  and was stopped); the merge itself is complete: train 65.9M sparse + 9.6M embedding pairs ->
+  73.5M union, test 51.2M + 7.8M -> 57.8M (log: `work/v6_blocking.log`). The "oracle" line printed
+  by `train` gives the recall ceiling on the validation entities (v5: 0.987) — compare that instead.
 
 ## Portal update (2026-09-27): candidate-set size counts toward the final ranking
 
