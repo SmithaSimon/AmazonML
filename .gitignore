@@ -1,0 +1,28 @@
+# challenge data (3 GB) - download from the organiser's portal
+student_resource/dataset/
+student_resource/.DS_Store
+student_resource/dataset/.DS_Store
+
+# pipeline intermediates (normalised parquet, candidates, features, models, embeddings)
+work/
+
+# submission outputs (large TSVs); published as release assets / kept locally
+output/
+output_v*/
+
+# python
+__pycache__/
+*.pyc
+*.egg-info/
+.venv/
+venv/
+
+# editor / os
+.claude/
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# local logs
+*.log
