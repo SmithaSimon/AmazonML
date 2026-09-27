@@ -52,6 +52,21 @@ S1 names and the domain / non-Latin / empty-address pool subset; per-country FAI
 (up to 6 above cosine 0.93) unioned into the candidate set; `cos_emb` as a feature; full
 retrain of both stages.
 
+## Candidate-set size (final-ranking criterion announced 2026-09-27)
+
+`candidate_pairs.tsv` must be the set the final model scores, and smaller sets rank higher.
+The blocking union has ~30 candidates per S1 entity (oracle recall 96.3%); using the first-pass
+model as the last filter (p >= 0.005, or the entity's best pair) leaves **4.3 per entity** at
+recall 96.2% (validation, 100k entities). Cut-off sweep:
+
+| rule | candidates / S1 | recall |
+|---|---|---|
+| none (blocking union) | 29.9 | 0.9626 |
+| p >= 0.001 or top-1 | 4.80 | 0.9625 |
+| p >= 0.005 or top-1 | 4.32 | 0.9621 |
+| p >= 0.01 or top-1 | 4.09 | 0.9615 |
+| p >= 0.05 or top-1 | 3.65 | 0.9583 |
+
 ## Loss analysis (v5 validation)
 
 77% of the lost score is missed matches on entities with no false merge, 23% false merges.

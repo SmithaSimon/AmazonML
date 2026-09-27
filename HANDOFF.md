@@ -28,6 +28,20 @@ Last updated: 2026-09-27 (morning). Read this first in a new Claude Code session
   Also check the blocking recall line printed by `merge-emb --split train` in `work/morning.log`
   (v5: 96.3%) to see how much the embedding channel added.
 
+## Portal update (2026-09-27): candidate-set size counts toward the final ranking
+
+The organisers announced that `candidate_pairs.tsv` is reviewed and that a **smaller candidate
+set per Source-1 entity ranks higher** beyond the leaderboard score. The pipeline now applies a
+last filtering stage before the final (stage-2) model: only pairs with first-pass probability
+>= 0.005 (always keeping each entity's best pair) are scored by stage 2 and reported as
+candidates. On validation this cuts 29.9 -> 4.3 candidates per entity with recall 0.9621 vs
+0.9626 (mean true matches per entity: 3.5). `predict2` writes this pruned set to
+`candidate_pairs.tsv`; `train2` applies the same rule so stage 2 is trained on the same
+distribution. The v5 files in `output_v5/` predate this (30 candidates per entity), so the
+**v6 run (or a rerun of `train2` + `predict2` on the v5 features) is needed before the final
+package**. Note: `work/model2.txt` may be a smoke-test model; `work/model2_v5.txt` is the real v5
+stage-2 model — `train2` rewrites `model2.txt` anyway.
+
 ## Files to carry over (the repo has only the code)
 
 | what | path | size | needed for |

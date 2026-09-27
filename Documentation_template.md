@@ -44,8 +44,9 @@ Blocking runs per country (open set of labels) with `sparse_dot_topn` cosine top
   3. `addr` — word unigrams over house number + address words + numbers, top-8 (renamed businesses)
   4. `namechar` — character 3-grams over the space-less core name, against only the pool records whose name is a domain or in a non-Latin script (~5% of the pool), top-8
   Tokens with document frequency > 2% are pruned (5% for the char channel); min cosine 0.05.
-- **Candidate pairs generated:** 51.2M for the 1.73M test Source-1 entities (29.5 per entity); 65.9M for all 2.2M training Source-1 entities.
+- **Candidate pairs generated:** blocking union 51.2M for the 1.73M test Source-1 entities (29.5 per entity); after the last filtering stage described below, about 4.3 per entity (~7.5M pairs) are scored by the final model and reported in `candidate_pairs.tsv`.
 - **How you ensured true matches were not lost:** measured on the full training set: pair recall 96.3% (union), 94.7% from `all` alone, 74.6% `addr`, 45.0% `name`, 4.9% `namechar`; oracle macro F_0.5 with a perfect classifier on these candidates = 0.987. Blocking recall by record type: plain 97.9%, domain names 96.5%, Indic-script names 88%, empty-address records 76% (the last two are the remaining miss categories).
+- **Last filtering stage (what `candidate_pairs.tsv` contains):** the ~30 blocking candidates per entity are scored by the cheap first-pass LightGBM, and only pairs with probability ≥ 0.005 (always keeping the entity's best pair) are passed to the final matching model (the cluster-consistency second pass). This leaves **4.3 candidates per Source-1 entity** (mean true matches: 3.5) at recall 96.2% vs 96.3% for the full union, i.e. the candidate set is within ~25% of the smallest possible set for this recall. `candidate_pairs.tsv` is exactly this pruned set; every id in `matching_results.tsv` appears in it.
 
 ---
 
