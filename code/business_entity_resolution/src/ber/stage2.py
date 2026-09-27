@@ -22,6 +22,11 @@ import polars as pl
 from . import config
 
 CONF = 0.9
+# Final filtering stage: only pairs the first pass does not reject are fed to the second-pass
+# model (and reported in candidate_pairs.tsv).  On validation, p >= 0.005 (always keeping each
+# entity's best candidate) cuts 29.9 -> 4.3 candidates per S1 entity at unchanged recall.
+PRUNE_P = 0.005
+PRUNE_KEEP_TOP = 1
 STAGE2_FEATURES = [
     "p", "p_logit", "p_rank", "p_sum_others", "p_max_other", "n_conf_others",
     "cand_p_max_other_s1", "cand_p_gap",
@@ -34,6 +39,14 @@ def _explode_tokens(df: pl.DataFrame, col: str, name: str) -> pl.DataFrame:
     return (
         df.select(["s1_id", "cand_id", pl.col(col).str.split(" ").list.unique().alias("tok")])
         .explode("tok").filter(pl.col("tok") != "").rename({"tok": name})
+    )
+
+
+def prune(pairs: pl.DataFrame) -> pl.DataFrame:
+    """Keep pairs with first-pass p >= PRUNE_P, plus each entity's PRUNE_KEEP_TOP best pairs."""
+    return pairs.filter(
+        (pl.col("p") >= PRUNE_P)
+        | (pl.col("p").rank("ordinal", descending=True).over("s1_id") <= PRUNE_KEEP_TOP)
     )
 
 

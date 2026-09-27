@@ -231,7 +231,7 @@ def train2(n_parts: int | None = None) -> None:
     """
     from . import model as M
     from .features import FEATURE_NAMES
-    from .stage2 import STAGE2_FEATURES, cand_top2, cluster_features
+    from .stage2 import STAGE2_FEATURES, cand_top2, cluster_features, prune
 
     tr_ids, val_ids = _split_ids()
     tr_s, val_s = pl.Series("s1_id", tr_ids), pl.Series("s1_id", val_ids)
@@ -268,14 +268,20 @@ def train2(n_parts: int | None = None) -> None:
     s1, pool = load_prepared("train")
     fold_a_s = pl.Series("s1_id", list(fold_a))
     rows_tr, rows_va = [], []
+    n_before = n_after = 0
     for k, (p, pp) in enumerate(zip(parts, prob_paths)):
         f = pl.read_parquet(p)
         pr = pl.read_parquet(pp)
+        n_before += pr.height
+        pr = prune(pr)                      # last filtering stage: same rule at train and test time
+        n_after += pr.height
         cf = cluster_features(pr, pool, top2)
-        f = f.join(cf, on=["s1_id", "cand_id"], how="left")
+        f = f.join(cf, on=["s1_id", "cand_id"], how="inner")
         rows_tr.append(f.filter(pl.col("s1_id").is_in(fold_a_s)))     # OOF probabilities (model_b)
         rows_va.append(f.filter(pl.col("s1_id").is_in(val_s)))
         print(f"  stage-2 features part {k}", flush=True)
+    n_s1 = pl.read_parquet(config.WORK_DIR / "train_queries.parquet").height
+    print(f"pruning kept {n_after:,} of {n_before:,} pairs ({n_after/n_s1:.2f} per S1 entity)", flush=True)
     ftr2, fva2 = pl.concat(rows_tr), pl.concat(rows_va)
     feats2 = FEATURE_NAMES + STAGE2_FEATURES
     print(f"stage-2 train pairs {ftr2.height:,}  val pairs {fva2.height:,}", flush=True)
@@ -300,7 +306,7 @@ def predict2() -> None:
     """Apply the second pass on test: needs test feature parts, model.txt, model2.txt."""
     from . import model as M
     from .features import FEATURE_NAMES
-    from .stage2 import STAGE2_FEATURES, cand_top2, cluster_features
+    from .stage2 import STAGE2_FEATURES, cand_top2, cluster_features, prune
 
     full = M.load(config.WORK_DIR / "model.txt")
     booster2 = M.load(config.WORK_DIR / "model2.txt")
@@ -316,20 +322,29 @@ def predict2() -> None:
     top2 = cand_top2(prob_paths)
     _, pool = load_prepared("test")
     outs = []
+    n_before = 0
     for k, (p, pp) in enumerate(zip(parts, prob_paths)):
-        f = pl.read_parquet(p).join(cluster_features(pl.read_parquet(pp), pool, top2), on=["s1_id", "cand_id"], how="left")
+        pr = pl.read_parquet(pp)
+        n_before += pr.height
+        pr = prune(pr)                      # last filtering stage -> this is the candidate set
+        f = pl.read_parquet(p).join(cluster_features(pr, pool, top2), on=["s1_id", "cand_id"], how="inner")
         outs.append(f.select(["s1_id", "cand_id"]).with_columns(pl.Series("prob", M.predict_proba(booster2, f, feats2))))
         print(f"  stage-2 scored part {k}", flush=True)
     pairs = pl.concat(outs)
+    n_s1 = pl.read_parquet(config.WORK_DIR / "test_s1.parquet").height
+    print(f"pruning kept {pairs.height:,} of {n_before:,} pairs ({pairs.height/n_s1:.2f} per S1 entity)", flush=True)
     pairs.write_parquet(config.WORK_DIR / "test_pairs2.parquet")
-    _write_outputs(pairs, rule)
+    _write_outputs(pairs, rule, candidates=pairs)
 
 
-def _write_outputs(pairs: pl.DataFrame, rule: dict) -> None:
+def _write_outputs(pairs: pl.DataFrame, rule: dict, candidates: pl.DataFrame | None = None) -> None:
+    """candidates: the exact pair set the final model scored (defaults to the blocking output)."""
     from . import model as M
 
     matches = M.apply_rule(pairs, rule)
-    cands = pl.read_parquet(config.WORK_DIR / "test_cands.parquet").group_by("s1_id").agg(pl.col("cand_id"))
+    if candidates is None:
+        candidates = pl.read_parquet(config.WORK_DIR / "test_cands.parquet")
+    cands = candidates.group_by("s1_id").agg(pl.col("cand_id"))
     cand_lists = dict(zip(cands["s1_id"], cands["cand_id"].to_list()))
     s1_ids = pl.read_parquet(config.WORK_DIR / "test_s1.parquet")["entity_id"].to_list()
     config.OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
